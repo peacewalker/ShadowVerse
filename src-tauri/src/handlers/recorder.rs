@@ -21,9 +21,7 @@ use recorder::platforms::douyin;
 use recorder::platforms::PlatformType;
 use recorder::platforms::{huya, kuaishou, tiktok};
 use recorder::RecorderInfo;
-#[cfg(feature = "gui")]
-use serde::Deserialize;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 fn is_reserved_kuaishou_room_id(value: &str) -> bool {
     matches!(
