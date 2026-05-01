@@ -21,6 +21,7 @@ use recorder::platforms::{
 use recorder::UserInfo;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+#[cfg(feature = "gui")]
 use tauri::Emitter;
 use url::Url;
 
@@ -746,7 +747,7 @@ pub async fn update_login_account(
             }
         }
         remove_login_account_by_platform_from_paths(&paths, &platform);
-
+        #[cfg(feature = "gui")] 
         let _ = state.app_handle.emit("accounts-updated", ());
         return Ok(());
     }
@@ -1449,7 +1450,7 @@ pub async fn get_browser_cookies(
     }
 }
 
-#[cfg(feature = "gui")]
+
 #[tauri::command]
 pub async fn open_tiktok_login_window(
     state: state_type!(),
@@ -1494,7 +1495,7 @@ pub async fn open_tiktok_login_window(
     Ok(())
 }
 
-#[cfg(feature = "gui")]
+
 #[tauri::command]
 pub async fn get_tiktok_webview_cookies(
     state: state_type!(),
@@ -1624,7 +1625,7 @@ pub async fn get_tiktok_webview_cookies(
     return build_webview_cookie_result("tiktok", cookie_str, cookie_list).await;
 }
 
-#[cfg(feature = "gui")]
+
 #[tauri::command]
 pub async fn open_douyin_login_window(
     state: state_type!(),
@@ -1672,7 +1673,7 @@ pub async fn open_douyin_login_window(
     Ok(())
 }
 
-#[cfg(feature = "gui")]
+
 #[tauri::command]
 pub async fn get_douyin_webview_cookies(
     state: state_type!(),
@@ -1771,7 +1772,7 @@ pub async fn get_douyin_webview_cookies(
     return build_webview_cookie_result("douyin", cookie_str, cookie_list).await;
 }
 
-#[cfg(feature = "gui")]
+
 #[tauri::command]
 pub async fn open_kuaishou_login_window(
     state: state_type!(),
@@ -1816,7 +1817,7 @@ pub async fn open_kuaishou_login_window(
     Ok(())
 }
 
-#[cfg(feature = "gui")]
+
 #[tauri::command]
 pub async fn get_kuaishou_webview_cookies(
     state: state_type!(),
@@ -1894,7 +1895,7 @@ pub async fn get_kuaishou_webview_cookies(
     return build_webview_cookie_result("kuaishou", cookie_str, cookie_list).await;
 }
 
-#[cfg(feature = "gui")]
+
 #[tauri::command]
 pub async fn open_huya_login_window(
     state: state_type!(),
@@ -1938,7 +1939,7 @@ pub async fn open_huya_login_window(
     Ok(())
 }
 
-#[cfg(feature = "gui")]
+
 #[tauri::command]
 pub async fn get_huya_webview_cookies(state: state_type!()) -> Result<WebviewCookieResult, String> {
     let label = "huya-login";
@@ -2023,7 +2024,7 @@ pub async fn get_huya_webview_cookies(state: state_type!()) -> Result<WebviewCoo
     return build_webview_cookie_result("huya", cookie_str, cookie_list).await;
 }
 
-#[cfg(feature = "gui")]
+
 #[tauri::command]
 pub async fn open_bilibili_login_window(
     state: state_type!(),
@@ -2068,7 +2069,7 @@ pub async fn open_bilibili_login_window(
     Ok(())
 }
 
-#[cfg(feature = "gui")]
+
 #[tauri::command]
 pub async fn get_bilibili_webview_cookies(
     state: state_type!(),
@@ -3191,6 +3192,7 @@ async fn refresh_guest_accounts_inner(
     let config_snapshot = state.config.read().await.clone();
     ensure_guest_accounts(&state.db, &config_snapshot).await;
     sync_tiktok_webview_cookies(&state.db, &config_snapshot).await;
+    #[cfg(feature = "gui")]
     let _ = state.app_handle.emit("accounts-updated", ());
 
     // Double check: close any active guest windows
