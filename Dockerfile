@@ -32,8 +32,11 @@ RUN apt-get update && apt-get install -y \
     cmake \
     pkg-config \
     libssl-dev \
-    glib-2.0-dev \
+    libglib2.0-dev \
+    libgtk-3-dev \
+    libwebkit2gtk-4.1-dev \
     libclang-dev \
+    clang \
     g++ \
     wget \
     xz-utils \
@@ -42,6 +45,8 @@ RUN apt-get update && apt-get install -y \
 
 # Copy Rust project files
 COPY src-tauri/Cargo.toml src-tauri/Cargo.lock ./src-tauri/
+COPY src-tauri/build.rs ./src-tauri/
+COPY src-tauri/tauri.conf.json ./src-tauri/
 COPY src-tauri/src ./src-tauri/src
 COPY src-tauri/crates ./src-tauri/crates
 
