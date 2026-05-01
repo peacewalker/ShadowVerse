@@ -53,7 +53,7 @@ COPY src-tauri/crates ./src-tauri/crates
 # Build Rust backend
 WORKDIR /app/src-tauri
 RUN rustup component add rustfmt
-RUN cargo build --no-default-features --features headless --release
+RUN cargo check --no-default-features --features headless --message-format=short
 
 # Final stage
 FROM debian:trixie-slim AS final
