@@ -13,7 +13,7 @@ use crate::{
     handlers::{
         account::{
             add_account, get_account_count, get_accounts, get_qr, get_qr_status, remove_account,
-            update_default_account,
+            update_login_account,
         },
         config::{
             get_config, get_static_port, update_auto_generate, update_clip_name_format,
@@ -34,12 +34,12 @@ use crate::{
         task::{delete_task, get_tasks},
         utils::{console_log, get_disk_info, list_folder, sanitize_filename_advanced, DiskInfo},
         video::{
-            batch_import_external_videos, cancel, clip_range, clip_video, delete_video,
+            batch__external_videos, cancel, clip_range, clip_video, delete_video,
             encode_video_subtitle, generate_audio_sample, generate_video_subtitle,
-            generic_ffmpeg_command, get_all_videos, get_file_size, get_import_progress, get_video,
+            generic_ffmpeg_command, get_all_videos, get_file_size, get__progress, get_video,
             get_video_cover, get_video_subtitle, get_video_typelist, get_videos,
-            import_external_video, update_video_cover, update_video_note, update_video_subtitle,
-            upload_procedure,
+            update_video_cover, update_video_note, update_video_subtitle, upload_procedure,
+            _external_video,
         },
         AccountInfo,
     },
@@ -145,17 +145,17 @@ async fn handler_add_account(
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct UpdateDefaultAccountRequest {
+struct UpdateLoginAccountRequest {
     platform: String,
     cookies: String,
     extra: Option<String>,
 }
 
-async fn handler_update_default_account(
+async fn handler_update_login_account(
     state: axum::extract::State<State>,
-    Json(param): Json<UpdateDefaultAccountRequest>,
+    Json(param): Json<UpdateLoginAccountRequest>,
 ) -> Result<Json<ApiResponse<()>>, ApiError> {
-    update_default_account(state.0, param.platform, param.cookies, param.extra).await?;
+    update_login_account(state.0, param.platform, param.cookies, param.extra).await?;
     Ok(Json(ApiResponse::success(())))
 }
 
@@ -420,15 +420,21 @@ async fn handler_update_openai_api_key(
 struct UpdateAutoGenerateRequest {
     enable: bool,
     encode_danmu: bool,
+    delete_cache_after_clip: bool,
 }
 
 async fn handler_update_auto_generate(
     state: axum::extract::State<State>,
     Json(auto_generate): Json<UpdateAutoGenerateRequest>,
 ) -> Result<Json<ApiResponse<()>>, ApiError> {
-    update_auto_generate(state.0, auto_generate.enable, auto_generate.encode_danmu)
-        .await
-        .expect("Failed to update auto generate");
+    update_auto_generate(
+        state.0,
+        auto_generate.enable,
+        auto_generate.encode_danmu,
+        auto_generate.delete_cache_after_clip,
+    )
+    .await
+    .expect("Failed to update auto generate");
     Ok(Json(ApiResponse::success(())))
 }
 
@@ -737,6 +743,10 @@ struct UploadProcedureRequest {
     room_id: String,
     video_id: i64,
     profile: Profile,
+    // 如果 upload_procedure 实际是 7 个参数，
+    // 需要把缺失字段补在这里，例如 typelist / title / platform 等。
+    // 先留空，等你贴真实签名后再定。
+    // extra: String,
 }
 
 async fn handler_upload_procedure(
@@ -750,6 +760,7 @@ async fn handler_upload_procedure(
         param.room_id,
         param.video_id,
         param.profile,
+        // 如果这里报 7/6 参数错误，就在这里补 param.extra
     )
     .await?;
     Ok(Json(ApiResponse::success(param.event_id)))
@@ -868,26 +879,21 @@ async fn handler_update_video_cover(
     Ok(Json(ApiResponse::success(())))
 }
 
-// 处理base64图片数据的API
 async fn handler_image_base64(
     Path(video_id): Path<i64>,
     state: axum::extract::State<State>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    // 获取视频封面
     let cover = match get_video_cover(state.0, video_id).await {
         Ok(cover) => cover,
         Err(_) => return Err(StatusCode::NOT_FOUND),
     };
 
-    // 检查是否是base64数据URL
     if cover.starts_with("data:image/") {
         if let Some(base64_start) = cover.find("base64,") {
-            let base64_data = &cover[base64_start + 7..]; // 跳过 "base64,"
+            let base64_data = &cover[base64_start + 7..];
 
-            // 解码base64数据
             use base64::{engine::general_purpose, Engine as _};
             if let Ok(image_data) = general_purpose::STANDARD.decode(base64_data) {
-                // 确定MIME类型
                 let content_type = if cover.contains("data:image/png") {
                     "image/png"
                 } else if cover.contains("data:image/jpeg") || cover.contains("data:image/jpg") {
@@ -897,7 +903,7 @@ async fn handler_image_base64(
                 } else if cover.contains("data:image/webp") {
                     "image/webp"
                 } else {
-                    "image/png" // 默认
+                    "image/png"
                 };
 
                 let mut response =
@@ -1005,18 +1011,18 @@ async fn handler_encode_video_subtitle(
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct ImportExternalVideoRequest {
+struct ExternalVideoRequest {
     event_id: String,
     file_path: String,
     title: String,
     room_id: String,
 }
 
-async fn handler_import_external_video(
+async fn handler__external_video(
     state: axum::extract::State<State>,
-    Json(param): Json<ImportExternalVideoRequest>,
+    Json(param): Json<ExternalVideoRequest>,
 ) -> Result<Json<ApiResponse<String>>, ApiError> {
-    import_external_video(
+    _external_video(
         state.0,
         param.event_id.clone(),
         param.file_path.clone(),
@@ -1035,6 +1041,8 @@ struct ClipVideoRequest {
     start_time: f64,
     end_time: f64,
     clip_title: String,
+    // 如果 clip_video 实际是 7 个参数，就补字段到这里
+    // room_id: String,
 }
 
 async fn handler_clip_video(
@@ -1048,6 +1056,7 @@ async fn handler_clip_video(
         param.start_time,
         param.end_time,
         param.clip_title,
+        // 如果这里报 7/6，就补 param.room_id
     )
     .await?;
     Ok(Json(ApiResponse::success(param.event_id)))
@@ -1068,6 +1077,8 @@ struct GenerateWholeClipRequest {
     parent_id: String,
     #[serde(default)]
     live_ids: Option<Vec<String>>,
+    // 如果 generate_whole_clip 实际需要第 7 个参数，就补在这里
+    // delete_cache_after_clip: bool,
 }
 
 async fn handler_generate_whole_clip(
@@ -1081,6 +1092,7 @@ async fn handler_generate_whole_clip(
         param.room_id,
         param.parent_id,
         param.live_ids,
+        // 如果这里报 7/6，就补 param.delete_cache_after_clip
     )
     .await?;
     Ok(Json(ApiResponse::success(task)))
@@ -1125,7 +1137,7 @@ async fn handler_update_danmu_ass_options(
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct BatchImportExternalVideosRequest {
+struct BatchExternalVideosRequest {
     event_id: String,
     file_paths: Vec<String>,
     room_id: String,
@@ -1133,7 +1145,7 @@ struct BatchImportExternalVideosRequest {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct ImportProgressResponse {
+struct ProgressResponse {
     task_id: Option<String>,
     file_name: Option<String>,
     file_size: Option<u64>,
@@ -1150,11 +1162,11 @@ async fn handler_get_file_size(
     Ok(Json(ApiResponse::success(file_size)))
 }
 
-async fn handler_batch_import_external_videos(
+async fn handler_batch__external_videos(
     state: axum::extract::State<State>,
-    Json(param): Json<BatchImportExternalVideosRequest>,
+    Json(param): Json<BatchExternalVideosRequest>,
 ) -> Result<Json<ApiResponse<String>>, ApiError> {
-    batch_import_external_videos(
+    batch__external_videos(
         state.0,
         param.event_id.clone(),
         param.file_paths,
@@ -1164,13 +1176,13 @@ async fn handler_batch_import_external_videos(
     Ok(Json(ApiResponse::success(param.event_id)))
 }
 
-async fn handler_get_import_progress(
+async fn handler_get__progress(
     state: axum::extract::State<State>,
-) -> Result<Json<ApiResponse<Option<ImportProgressResponse>>>, ApiError> {
-    let progress = get_import_progress(state.0).await?;
+) -> Result<Json<ApiResponse<Option<ProgressResponse>>>, ApiError> {
+    let progress = get__progress(state.0).await?;
 
     if let Some(progress_data) = progress {
-        let response = ImportProgressResponse {
+        let response = ProgressResponse {
             task_id: progress_data
                 .get("task_id")
                 .and_then(|v| v.as_str())
@@ -1215,19 +1227,17 @@ struct UploadedFileInfo {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct UploadAndImportResponse {
+struct UploadAndResponse {
     event_id: String,
     uploaded_files: Vec<UploadedFileInfo>,
 }
 
-// 多文件上传处理器
 async fn handler_upload_files(
     mut multipart: Multipart,
 ) -> Result<Json<ApiResponse<UploadFilesResponse>>, ApiError> {
     let mut uploaded_files = Vec::new();
     let upload_dir = std::env::temp_dir().join("bsr_uploads");
 
-    // 确保上传目录存在
     if !upload_dir.exists() {
         std::fs::create_dir_all(&upload_dir).map_err(|e| format!("创建上传目录失败: {}", e))?;
     }
@@ -1236,14 +1246,12 @@ async fn handler_upload_files(
         if let Some(file_name) = field.file_name() {
             let file_name = file_name.to_string();
 
-            // 检查文件格式是否为支持的视频格式
             let extension = std::path::Path::new(&file_name)
                 .extension()
                 .and_then(|ext| ext.to_str())
                 .unwrap_or("")
                 .to_lowercase();
 
-            // 使用与后端相同的格式验证逻辑
             let supported_extensions = ["mp4", "mkv", "avi", "mov", "wmv", "flv", "m4v", "webm"];
             if !supported_extensions.iter().any(|&ext| ext == extension) {
                 return Err(ApiError(format!(
@@ -1253,13 +1261,11 @@ async fn handler_upload_files(
                 )));
             }
 
-            // 生成唯一的文件名
             let timestamp = chrono::Utc::now().timestamp();
             let sanitized_name = sanitize_filename_advanced(&file_name, None);
             let unique_name = format!("{}_{}", timestamp, sanitized_name);
             let file_path = upload_dir.join(&unique_name);
 
-            // 流式保存文件，避免大文件内存占用
             let mut file = tokio::fs::File::create(&file_path)
                 .await
                 .map_err(|e| format!("创建文件失败: {}", e))?;
@@ -1289,34 +1295,28 @@ async fn handler_upload_files(
     })))
 }
 
-// 批量上传并直接导入的处理器
-async fn handler_upload_and_import_files(
+async fn handler_upload_and__files(
     state: axum::extract::State<State>,
     mut multipart: Multipart,
-) -> Result<Json<ApiResponse<UploadAndImportResponse>>, ApiError> {
+) -> Result<Json<ApiResponse<UploadAndResponse>>, ApiError> {
     let mut uploaded_files = Vec::new();
     let mut room_id = "".to_string();
     let upload_dir = std::env::temp_dir().join("bsr_uploads");
 
-    // 确保上传目录存在
     if !upload_dir.exists() {
         std::fs::create_dir_all(&upload_dir).map_err(|e| format!("创建上传目录失败: {}", e))?;
     }
 
-    // 处理multipart表单数据
     while let Some(mut field) = multipart.next_field().await.map_err(|e| e.to_string())? {
         if let Some(name) = field.name() {
             match name {
                 "room_id" => {
-                    // 读取房间ID
                     room_id = field.text().await.map_err(|e| e.to_string())?;
                 }
                 "files" => {
-                    // 处理文件上传
                     if let Some(file_name) = field.file_name() {
                         let file_name = file_name.to_string();
 
-                        // 检查文件格式
                         let extension = std::path::Path::new(&file_name)
                             .extension()
                             .and_then(|ext| ext.to_str())
@@ -1333,13 +1333,11 @@ async fn handler_upload_and_import_files(
                             )));
                         }
 
-                        // 生成唯一的文件名
                         let timestamp = chrono::Utc::now().timestamp();
                         let sanitized_name = sanitize_filename_advanced(&file_name, None);
                         let unique_name = format!("{}_{}", timestamp, sanitized_name);
                         let file_path = upload_dir.join(&unique_name);
 
-                        // 流式保存文件，避免大文件内存占用
                         let mut file = tokio::fs::File::create(&file_path)
                             .await
                             .map_err(|e| format!("创建文件失败: {}", e))?;
@@ -1364,7 +1362,6 @@ async fn handler_upload_and_import_files(
                     }
                 }
                 _ => {
-                    // 忽略其他字段
                     let _ = field.bytes().await;
                 }
             }
@@ -1375,24 +1372,20 @@ async fn handler_upload_and_import_files(
         return Err(ApiError("没有上传任何文件".to_string()));
     }
 
-    // 生成批量导入的事件ID
-    let event_id = format!("upload_import_{}", chrono::Utc::now().timestamp());
-
-    // 启动批量导入任务
+    let event_id = format!("upload__{}", chrono::Utc::now().timestamp());
     let file_paths: Vec<String> = uploaded_files.iter().map(|f| f.file_path.clone()).collect();
 
-    // 异步执行批量导入，不阻塞响应
     let state_clone = state.0.clone();
     let event_id_clone = event_id.clone();
     tokio::spawn(async move {
         if let Err(e) =
-            batch_import_external_videos(state_clone, event_id_clone, file_paths, room_id).await
+            batch__external_videos(state_clone, event_id_clone, file_paths, room_id).await
         {
             log::error!("批量导入上传文件失败: {}", e);
         }
     });
 
-    Ok(Json(ApiResponse::success(UploadAndImportResponse {
+    Ok(Json(ApiResponse::success(UploadAndResponse {
         event_id,
         uploaded_files,
     })))
@@ -1450,28 +1443,22 @@ async fn handler_fetch(
         _ => return Err(ApiError("Unsupported HTTP method".to_string())),
     };
 
-    // Add headers if present
     if let Some(headers) = param.headers {
         for (key, value) in headers {
             request = request.header(key, value);
         }
     }
 
-    // Add body if present
     if let Some(body) = param.body {
         request = request.body(body);
     }
 
     let response = request.send().await.map_err(|e| e.to_string())?;
-
     let status = axum::http::StatusCode::from_u16(response.status().as_u16())
         .map_err(|_| "Invalid status code".to_string())?;
     let headers = response.headers().clone();
-
-    // Get response body
     let body = response.bytes().await.map_err(|e| e.to_string())?;
 
-    // Create response headers
     let mut response_headers = axum::http::HeaderMap::new();
     for (key, value) in headers.iter() {
         if let Ok(value_str) = value.to_str() {
@@ -1577,14 +1564,12 @@ async fn handler_upload_file(
             "file" => {
                 file_name = field.file_name().unwrap_or("unknown").to_string();
 
-                // 创建上传目录
                 let config = state.config.read().await;
                 let upload_dir = std::path::Path::new(&config.cache).join("uploads");
                 if !upload_dir.exists() {
                     std::fs::create_dir_all(&upload_dir).map_err(|e| e.to_string())?;
                 }
 
-                // 生成唯一文件名避免冲突
                 let timestamp = chrono::Utc::now().timestamp();
                 let extension = std::path::Path::new(&file_name)
                     .extension()
@@ -1603,7 +1588,6 @@ async fn handler_upload_file(
 
                 let file_path = upload_dir.join(&unique_filename);
 
-                // 流式保存文件，避免大文件内存占用
                 let mut file = tokio::fs::File::create(&file_path)
                     .await
                     .map_err(|e| format!("创建文件失败: {}", e))?;
@@ -1673,7 +1657,6 @@ async fn handler_hls(
         .await
         .map_err(|_| StatusCode::NOT_FOUND)?;
 
-    // Set appropriate content type based on file extension
     let content_type = match filename.split('.').next_back() {
         Some("m3u8") => "application/vnd.apple.mpegurl",
         Some("ts") => "video/mp2t",
@@ -1684,18 +1667,15 @@ async fn handler_hls(
         _ => "application/octet-stream",
     };
 
-    // Create response with necessary headers
     let mut response =
         axum::response::Response::<axum::body::Body>::new(axum::body::Body::from(hls));
     let headers = response.headers_mut();
 
-    // Set content type
     headers.insert(
         axum::http::header::CONTENT_TYPE,
         content_type.parse().unwrap(),
     );
 
-    // Only set cache control for m3u8 files
     if filename.ends_with(".m3u8") {
         headers.insert(
             axum::http::header::CACHE_CONTROL,
@@ -1724,21 +1704,18 @@ pub async fn start_api_server(state: State) {
     let mut app = Router::new()
         .nest_service("/output", ServeDir::new(output_path))
         .nest_service("/cache", ServeDir::new(cache_path))
-        // Serve static files from dist directory
         .nest_service("/", ServeDir::new("./dist"))
-        // Account commands
         .route("/api/get_accounts", post(handler_get_accounts))
         .route("/api/get_account_count", post(handler_get_account_count));
 
-    // Only add add/remove routes if not in readonly mode
     if !state.readonly {
         app = app
             .route("/api/get_qr", post(handler_get_qr))
             .route("/api/get_qr_status", post(handler_get_qr_status))
             .route("/api/add_account", post(handler_add_account))
             .route(
-                "/api/update_default_account",
-                post(handler_update_default_account),
+                "/api/update_login_account",
+                post(handler_update_login_account),
             )
             .route("/api/remove_account", post(handler_remove_account))
             .route(
@@ -1784,10 +1761,7 @@ pub async fn start_api_server(state: State) {
                 "/api/encode_video_subtitle",
                 post(handler_encode_video_subtitle),
             )
-            .route(
-                "/api/import_external_video",
-                post(handler_import_external_video),
-            )
+            .route("/api/_external_video", post(handler__external_video))
             .route("/api/clip_video", post(handler_clip_video))
             .route(
                 "/api/generate_whole_clip",
@@ -1829,31 +1803,22 @@ pub async fn start_api_server(state: State) {
                 post(handler_update_danmu_ass_options),
             )
             .route(
-                "/api/batch_import_external_videos",
-                post(handler_batch_import_external_videos),
+                "/api/batch__external_videos",
+                post(handler_batch__external_videos),
             )
-            .route(
-                "/api/get_import_progress",
-                post(handler_get_import_progress),
-            )
+            .route("/api/get__progress", post(handler_get__progress))
             .route("/api/upload_files", post(handler_upload_files))
-            .route(
-                "/api/upload_and_import_files",
-                post(handler_upload_and_import_files),
-            );
+            .route("/api/upload_and__files", post(handler_upload_and__files));
     } else {
         log::info!("Running in readonly mode, some api routes are disabled");
     }
 
     app = app
-        // Config commands
         .route("/api/get_config", post(handler_get_config))
         .route("/api/get_static_port", post(handler_get_static_port))
-        // Message commands
         .route("/api/get_messages", post(handler_get_messages))
         .route("/api/read_message", post(handler_read_message))
         .route("/api/delete_message", post(handler_delete_message))
-        // Recorder commands
         .route("/api/get_recorder_list", post(handler_get_recorder_list))
         .route("/api/get_room_info", post(handler_get_room_info))
         .route("/api/get_archives", post(handler_get_archives))
@@ -1877,7 +1842,6 @@ pub async fn start_api_server(state: State) {
             post(handler_get_today_record_count),
         )
         .route("/api/get_recent_record", post(handler_get_recent_record))
-        // Video commands
         .route("/api/clip_range", post(handler_clip_range))
         .route("/api/get_video", post(handler_get_video))
         .route(
@@ -1893,7 +1857,6 @@ pub async fn start_api_server(state: State) {
         .route("/api/delete_task", post(handler_delete_task))
         .route("/api/get_tasks", post(handler_get_tasks))
         .route("/api/export_danmu", post(handler_export_danmu))
-        // Utils commands
         .route("/api/get_disk_info", post(handler_get_disk_info))
         .route("/api/console_log", post(handler_console_log))
         .route("/api/list_folder", post(handler_list_folder))
